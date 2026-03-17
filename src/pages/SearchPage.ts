@@ -19,7 +19,7 @@ class SearchPage extends BasePage {
 
   private readonly searchInputAtEditTextSimpleSelector = this.getSelector(
     "xpath",
-    '//android.widget.EditText',
+    "//android.widget.EditText",
   );
 
   private readonly searchInputAtEditTextSelector = this.getSelector(
