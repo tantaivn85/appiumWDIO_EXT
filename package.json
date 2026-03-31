@@ -5,13 +5,12 @@
   "type": "commonjs",
   "scripts": {
     "test": "npx wdio run ./wdio.conf.ts",
-    "test:pixel9": "AVD_NAME=\"Pixel_9\" npm test",
-    "appium": "appium --base-path /wd/hub"
+    "test:pixel9": "AVD_NAME=\"Pixel_9\" npx wdio run ./wdio.conf.ts",
+    "appium": "appium --base-path /wd/hub --allow-insecure=adb_shell"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",
     "@types/node": "^20.11.30",
-    "@types/webdriverio": "^4.13.3",
     "appium": "^2.5.4",
     "appium-uiautomator2-driver": "^2.29.2",
     "expect-webdriverio": "^5.6.4",
@@ -26,4 +25,3 @@
     "webdriverio": "^9.25.0"
   }
 }
-
