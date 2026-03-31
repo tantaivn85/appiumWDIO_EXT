@@ -12,6 +12,7 @@ Automation for the UAT App of exoTrail.
 4. Run tests:
    - `npm test`
    - `npm run test:pixel9`
+   - `E2E_EMAIL=testgamevt+14@gmail.com E2E_PASSWORD=123456@Exo npm run test:pixel9`
 
 ## Environment overrides
 

@@ -1,4 +1,5 @@
 import { appiumOptions } from "./src/config/appium";
+import { assertInternetConnection } from "./src/utils/network";
 
 export const config: WebdriverIO.Config = {
     runner: 'local',
@@ -22,5 +23,8 @@ export const config: WebdriverIO.Config = {
     mochaOpts: {
         ui: 'bdd',
         timeout: 120000
+    },
+    before: async function () {
+        await assertInternetConnection();
     },
 }
