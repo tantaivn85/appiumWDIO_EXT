@@ -40,7 +40,9 @@ jobs:
 
       - name: Ensure UiAutomator2 driver is installed
         run: |
-          npx appium driver list --installed 2>&1 | grep -q uiautomator2 || npx appium driver install uiautomator2
+          DRIVERS=$(npx appium driver list --installed 2>&1)
+          echo "$DRIVERS"
+          echo "$DRIVERS" | grep -q uiautomator2 || npx appium driver install uiautomator2
 
       - name: Run tests on Android emulator
         uses: reactivecircus/android-emulator-runner@v2
