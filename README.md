@@ -13,6 +13,7 @@ Automation for the UAT App of exoTrail.
    - `npm test`
    - `npm run test:pixel9`
    - `E2E_EMAIL=testgamevt+14@gmail.com E2E_PASSWORD=123456@Exo npm run test:pixel9`
+   - `E2E_EMAIL=testgamevt+14@gmail.com E2E_PASSWORD='123456@Exo' npm run test:pixel9 -- --spec tests/lifecycle.spec.ts 2>&1 | grep -E "✓|✖|passing|failing|Spec Files"`
 
 ## Environment overrides
 
