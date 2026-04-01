@@ -1,0 +1,84 @@
+name: Android E2E (Appium + WDIO)
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  schedule:
+    - cron: '0 03 * * *'
+  workflow_dispatch:
+
+jobs:
+  android-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    env:
+      APPIUM_SERVER_URL: http://127.0.0.1:4723/wd/hub
+      APP_PACKAGE: com.exo.uat
+      APP_ACTIVITY: com.exo.stg.ui.main.MainActivity
+      DEVICE_NAME: Android Emulator
+      UDID: emulator-5554
+      E2E_EMAIL: ${{ secrets.E2E_EMAIL }}
+      E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Ensure UiAutomator2 driver is installed
+        run: |
+          npx appium driver list --installed | grep -q uiautomator2 || npx appium driver install uiautomator2
+
+      - name: Run tests on Android emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          profile: pixel_6
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          disable-animations: true
+          script: |
+            adb wait-for-device
+            adb devices
+
+            if [ ! -f app.apk ]; then
+              echo "app.apk not found at repository root"
+              exit 1
+            fi
+
+            adb install -r app.apk
+
+            npm run appium > appium.log 2>&1 &
+
+            for i in {1..30}; do
+              if curl -sf http://127.0.0.1:4723/wd/hub/status > /dev/null; then
+                break
+              fi
+              echo "Waiting for Appium to be ready..."
+              sleep 2
+            done
+
+            curl -sf http://127.0.0.1:4723/wd/hub/status > /dev/null
+
+            npm test
+
+      - name: Upload Appium logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: appium-logs
+          path: appium.log
+          if-no-files-found: ignore
