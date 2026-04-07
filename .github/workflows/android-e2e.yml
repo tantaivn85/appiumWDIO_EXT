@@ -1,0 +1,314 @@
+name: Android E2E (Appium + WDIO)
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  schedule:
+    - cron: '0 22 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: android-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      actions: read
+
+    env:
+      APPIUM_SERVER_URL: http://127.0.0.1:4723/wd/hub
+      APK_FILE: Andr.2.6.0.UAT.apk
+      APP_PACKAGE: com.exo.uat
+      APP_ACTIVITY: com.exo.stg.ui.main.MainActivity
+      DEVICE_NAME: Android Emulator
+      UDID: emulator-5554
+      E2E_APK_URL: ${{ secrets.E2E_APK_URL }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      E2E_EMAIL: ${{ secrets.E2E_EMAIL }}
+      E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
+      TESTOMATIO: ${{ secrets.TESTOMATIO }}
+      TESTOMATIO_ENV: "ci,android,${{ github.ref_name }}"
+      SEARCH_RESULTS_TIMEOUT_MS: "45000"
+      DETAIL_PAGE_TIMEOUT_MS: "45000"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Enable KVM group perms
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          ls -la /dev/kvm
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Prepare APK
+        run: |
+          if [ -f "$APK_FILE" ]; then
+            echo "Using repository-local $APK_FILE"
+            exit 0
+          fi
+
+          if [ -n "$E2E_APK_URL" ]; then
+            echo "Downloading APK from E2E_APK_URL"
+            curl -fL "$E2E_APK_URL" -o "$APK_FILE"
+            ls -lh "$APK_FILE"
+            exit 0
+          fi
+
+          echo "No APK available. Add $APK_FILE to the workspace before running locally, or set the E2E_APK_URL GitHub secret for CI."
+          exit 1
+
+      - name: Import tests to Testomat.io
+        if: env.TESTOMATIO != ''
+        run: npm run testomat:import
+
+      - name: Create Testomat test run
+        if: env.TESTOMATIO != ''
+        id: testomat_run
+        run: |
+          RUN_TIMESTAMP=$(TZ=Asia/Ho_Chi_Minh date '+%Y-%m-%d %H:%M:%S')
+          RUN_TITLE="Android - \"${GITHUB_REF_NAME}\" @ \"${RUN_TIMESTAMP}\""
+
+          echo "TESTOMATIO_TITLE=$RUN_TITLE" >> "$GITHUB_ENV"
+          echo "Using Testomat run title: $RUN_TITLE"
+
+          RUN_OUTPUT=$(NO_COLOR=1 TESTOMATIO_TITLE="$RUN_TITLE" npx @testomatio/reporter run 2>&1)
+          RUN_OUTPUT_CLEAN=$(echo "$RUN_OUTPUT" | perl -pe 's/\e\[[0-9;]*[A-Za-z]//g')
+          echo "$RUN_OUTPUT_CLEAN"
+
+          RUN_ID=$(echo "$RUN_OUTPUT_CLEAN" | sed -n 's/.*TESTOMATIO_RUN=\([^ ]*\).*/\1/p' | tail -n 1 | tr -d '\r')
+          RUN_URL=$(echo "$RUN_OUTPUT_CLEAN" | grep -Eo 'https://[^ ]+' | head -n 1 | tr -d '\r')
+
+          if [ -z "$RUN_ID" ]; then
+            echo "Failed to create Testomat run id"
+            exit 1
+          fi
+
+          echo "TESTOMATIO_RUN=$RUN_ID" >> "$GITHUB_ENV"
+          echo "testomat_run_url=$RUN_URL" >> "$GITHUB_OUTPUT"
+          echo "Using Testomat run id: $RUN_ID"
+          if [ -n "$RUN_URL" ]; then
+            echo "Testomat run URL: $RUN_URL"
+          fi
+
+      - name: Ensure UiAutomator2 driver is installed
+        run: |
+          DRIVERS=$(npx appium driver list --installed 2>&1)
+          echo "$DRIVERS"
+          echo "$DRIVERS" | grep -q uiautomator2 || npx appium driver install uiautomator2
+
+      - name: Run tests on Android emulator
+        id: e2e_tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          target: google_atd
+          arch: x86_64
+          profile: pixel_5
+          cores: 2
+          ram-size: 2048M
+          heap-size: 512M
+          pre-emulator-launch-script: adb start-server && adb devices
+          emulator-options: -no-window -no-snapshot -gpu swiftshader_indirect -noaudio -no-boot-anim -no-metrics -camera-back none -camera-front none
+          emulator-boot-timeout: 1200
+          disable-animations: true
+          script: >-
+            adb devices &&
+            adb shell getprop sys.boot_completed &&
+            test -f "$APK_FILE" || { echo "$APK_FILE not found at repository root"; exit 1; } &&
+            adb install -r "$APK_FILE" &&
+            (npm run appium > appium.log 2>&1 &) &&
+            sh -c 'i=1; while [ "$i" -le 30 ]; do if curl -sf http://127.0.0.1:4723/wd/hub/status > /dev/null; then exit 0; fi; echo "Waiting for Appium to be ready..."; sleep 2; i=$((i + 1)); done; exit 1' &&
+            curl -sf http://127.0.0.1:4723/wd/hub/status > /dev/null &&
+            npm run test
+
+      - name: Summarize JUnit report
+        if: always()
+        id: junit_summary
+        run: |
+          if [ ! -d reports/junit ]; then
+            echo "tests=0" >> "$GITHUB_OUTPUT"
+            echo "failures=0" >> "$GITHUB_OUTPUT"
+            echo "skipped=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          shopt -s nullglob
+          FILES=(reports/junit/*.xml)
+
+          if [ ${#FILES[@]} -eq 0 ]; then
+            echo "tests=0" >> "$GITHUB_OUTPUT"
+            echo "failures=0" >> "$GITHUB_OUTPUT"
+            echo "skipped=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          sum_first_attr() {
+            local attr="$1"
+            local total=0
+
+            for file in "${FILES[@]}"; do
+              local value
+              value=$(grep -m1 -oE "${attr}=\"[0-9]+\"" "$file" | grep -oE '[0-9]+' || echo 0)
+              total=$((total + value))
+            done
+
+            echo "$total"
+          }
+
+          TESTS=$(sum_first_attr "tests")
+          FAILURES=$(sum_first_attr "failures")
+          SKIPPED=$(sum_first_attr "skipped")
+
+          echo "tests=$TESTS" >> "$GITHUB_OUTPUT"
+          echo "failures=$FAILURES" >> "$GITHUB_OUTPUT"
+          echo "skipped=$SKIPPED" >> "$GITHUB_OUTPUT"
+
+      - name: Upload JUnit report
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: junit-report
+          path: reports/junit
+          if-no-files-found: ignore
+
+      - name: Generate HTML report
+        if: always()
+        run: |
+          if [ ! -d reports/junit ]; then
+            echo "JUnit report folder not found, skipping HTML report generation"
+            exit 0
+          fi
+
+          mkdir -p reports/html
+          npm run report:html
+
+      - name: Upload HTML report
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: html-report
+          path: reports/html
+          if-no-files-found: ignore
+
+      - name: Resolve report links
+        if: always()
+        id: report_links
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          API_URL="https://api.github.com/repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts"
+          RESP=$(curl -sS -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" "$API_URL")
+          echo "$RESP" > artifacts.json
+
+          HTML_ARTIFACT_ID=$(node -e "const fs=require('fs');const d=JSON.parse(fs.readFileSync('artifacts.json','utf8'));const a=(d.artifacts||[]).find(x=>x.name==='html-report');process.stdout.write(a?String(a.id):'');")
+          JUNIT_ARTIFACT_ID=$(node -e "const fs=require('fs');const d=JSON.parse(fs.readFileSync('artifacts.json','utf8'));const a=(d.artifacts||[]).find(x=>x.name==='junit-report');process.stdout.write(a?String(a.id):'');")
+
+          HTML_REPORT_URL=""
+          JUNIT_REPORT_URL=""
+
+          if [ -n "$HTML_ARTIFACT_ID" ]; then
+            HTML_REPORT_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts/${HTML_ARTIFACT_ID}"
+          fi
+
+          if [ -n "$JUNIT_ARTIFACT_ID" ]; then
+            JUNIT_REPORT_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts/${JUNIT_ARTIFACT_ID}"
+          fi
+
+          echo "html_report_url=$HTML_REPORT_URL" >> "$GITHUB_OUTPUT"
+          echo "junit_report_url=$JUNIT_REPORT_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Notify Telegram
+        if: always() && env.TELEGRAM_BOT_TOKEN != '' && env.TELEGRAM_CHAT_ID != '' && (github.event_name == 'push' || github.event_name == 'pull_request')
+        run: |
+          STATUS="${{ job.status }}"
+          if [ "$STATUS" = "success" ]; then ICON="✅"; else ICON="❌"; fi
+
+          MESSAGE="$ICON Android E2E: $STATUS%0A"
+          MESSAGE="$MESSAGE Repo: ${{ github.repository }}%0A"
+          MESSAGE="$MESSAGE Branch: ${{ github.ref_name }}%0A"
+          MESSAGE="$MESSAGE Commit: ${{ github.sha }}%0A"
+          MESSAGE="$MESSAGE Tests: ${{ steps.junit_summary.outputs.tests }}%0A"
+          MESSAGE="$MESSAGE Failures: ${{ steps.junit_summary.outputs.failures }}%0A"
+          MESSAGE="$MESSAGE Skipped: ${{ steps.junit_summary.outputs.skipped }}%0A"
+          MESSAGE="$MESSAGE Run: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+          if [ -n "${{ steps.report_links.outputs.html_report_url }}" ]; then
+            MESSAGE="$MESSAGE%0AHTML report: ${{ steps.report_links.outputs.html_report_url }}"
+          fi
+
+          if [ -n "${{ steps.report_links.outputs.junit_report_url }}" ]; then
+            MESSAGE="$MESSAGE%0AJUnit report: ${{ steps.report_links.outputs.junit_report_url }}"
+          fi
+
+          if [ -n "${{ steps.testomat_run.outputs.testomat_run_url }}" ]; then
+            MESSAGE="$MESSAGE%0ATestomat run: ${{ steps.testomat_run.outputs.testomat_run_url }}"
+          fi
+
+          send_telegram() {
+            local chat_id="$1"
+            curl -sS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+              -d "chat_id=${chat_id}" \
+              -d "text=${MESSAGE}"
+          }
+
+          RESPONSE=$(send_telegram "${TELEGRAM_CHAT_ID}")
+          echo "$RESPONSE"
+
+          if echo "$RESPONSE" | grep -q '"ok":true'; then
+            exit 0
+          fi
+
+          MIGRATED_CHAT_ID=$(echo "$RESPONSE" | sed -n 's/.*"migrate_to_chat_id":\(-\?[0-9]\+\).*/\1/p')
+          if [ -n "$MIGRATED_CHAT_ID" ]; then
+            echo "Telegram chat migrated. Retrying with new chat id: $MIGRATED_CHAT_ID"
+            RESPONSE_RETRY=$(send_telegram "${MIGRATED_CHAT_ID}")
+            echo "$RESPONSE_RETRY"
+
+            if echo "$RESPONSE_RETRY" | grep -q '"ok":true'; then
+              echo "Update TELEGRAM_CHAT_ID secret to: $MIGRATED_CHAT_ID"
+              exit 0
+            fi
+          fi
+
+          echo "Telegram notification failed. Check TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID secrets."
+          exit 1
+
+      - name: Upload Appium logs
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: appium-logs
+          path: appium.log
+          if-no-files-found: ignore
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: screenshots
+          path: reports/screenshots
+          if-no-files-found: ignore
+          retention-days: 2

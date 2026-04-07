@@ -1,0 +1,11 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"diffEditor.renderSideBySide": true,
+		"diffEditor.useInlineViewWhenSpaceIsLimited": true
+	}
+}

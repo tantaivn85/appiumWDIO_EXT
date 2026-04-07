@@ -1,0 +1,37 @@
+{
+  "name": "appiumwdio_ext",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "test": "npx wdio run ./wdio.conf.ts",
+    "test:device-state": "npx wdio run ./wdio.conf.ts --spec ./tests/device-state.spec.ts",
+    "test:launch": "npx wdio run ./wdio.conf.ts --spec ./tests/launch.spec.ts",
+    "test:pixel9": "AVD_NAME=\"Pixel_9\" npx wdio run ./wdio.conf.ts",
+    "test:pixel9:launch": "AVD_NAME=\"Pixel_9\" npx wdio run ./wdio.conf.ts --spec ./tests/launch.spec.ts",
+    "test:pixel9:spec": "sh -c 'AVD_NAME=\"Pixel_9\" npx wdio run ./wdio.conf.ts --spec \"$1\"' --",
+    "test:pixel9:spec:shortreport": "bash -o pipefail -c 'AVD_NAME=\"Pixel_9\" npx wdio run ./wdio.conf.ts --spec \"$1\" 2>&1 | grep -E \"✓|✖|passing|failing|Spec Files|ERROR\"' --",
+    "report:html": "junit-viewer --results=./reports/junit --save=./reports/html/index.html --title=appiumWDIO_EXT%20E2E%20Report",
+    "testomat:import": "npx check-tests Mocha \"tests/**/*.spec.ts\" --typescript",
+    "appium": "appium --base-path /wd/hub --allow-insecure=adb_shell"
+  },
+  "devDependencies": {
+    "@testomatio/reporter": "^2.7.5",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^20.11.30",
+    "@wdio/junit-reporter": "^9.27.0",
+    "appium": "^2.5.4",
+    "appium-uiautomator2-driver": "^2.29.2",
+    "expect-webdriverio": "^5.6.4",
+    "junit-viewer": "^4.11.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.4"
+  },
+  "dependencies": {
+    "@wdio/cli": "^9.25.0",
+    "@wdio/local-runner": "^9.25.0",
+    "@wdio/mocha-framework": "^9.25.0",
+    "@wdio/spec-reporter": "^9.25.0",
+    "webdriverio": "^9.25.0"
+  }
+}
