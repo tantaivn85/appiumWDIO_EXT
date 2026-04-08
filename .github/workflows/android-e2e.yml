@@ -241,7 +241,7 @@ jobs:
           echo "junit_report_url=$JUNIT_REPORT_URL" >> "$GITHUB_OUTPUT"
 
       - name: Notify Telegram
-        if: always() && env.TELEGRAM_BOT_TOKEN != '' && env.TELEGRAM_CHAT_ID != '' && (github.event_name == 'push' || github.event_name == 'pull_request')
+        if: always() && env.TELEGRAM_BOT_TOKEN != '' && env.TELEGRAM_CHAT_ID != ''
         run: |
           STATUS="${{ job.status }}"
           if [ "$STATUS" = "success" ]; then ICON="✅"; else ICON="❌"; fi
