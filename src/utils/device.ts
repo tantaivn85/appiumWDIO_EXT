@@ -197,18 +197,41 @@ export async function endSimulatedCall(
 }
 
 /** Set system font scale (accessibility). 1.0 = normal, 1.5 = 150%
- * Restarts the app so the new scale is applied to the Activity on startup.
+ *
+ * Does NOT kill/relaunch: font_scale is a live Configuration change that the
+ * running Activity handles (or React Native forwards to JS). Killing and
+ * relaunching with software rendering (swiftshader_indirect) on CI causes the
+ * display to render black due to a stale UiAutomator2 cache from the previous
+ * instance, making all subsequent element queries return empty.
  */
 export async function setFontScale(scale: number): Promise<void> {
   await browser.execute("mobile: shell", {
     command: "settings",
     args: ["put", "system", "font_scale", String(scale)],
   });
-  await killAndRelaunch();
+  // Brief pause so the OS dispatches the Configuration change to the app.
+  await browser.pause(2000);
+  // Confirm the Activity is still alive and its window is accessible.
+  await browser.waitUntil(
+    async () => {
+      try {
+        return await $("id=android:id/content").isExisting();
+      } catch {
+        return false;
+      }
+    },
+    { timeout: 20000, interval: 1500 },
+  );
 }
 
 /** Toggle dark mode on/off.
- * Restarts the app so the Activity is re-created with the correct theme.
+ *
+ * Does NOT kill/relaunch: `cmd uimode night yes/no` sends a UiMode
+ * Configuration change to the running app. On CI emulators using
+ * swiftshader_indirect (software rendering), killing and relaunching after a
+ * night-mode change produces a permanently black display — the renderer does
+ * not recover and UiAutomator2 finds zero elements for the rest of the test.
+ * Letting the live Activity receive the change avoids this entirely.
  */
 export async function setDarkMode(enabled: boolean): Promise<void> {
   const mode = enabled ? "yes" : "no";
@@ -216,5 +239,17 @@ export async function setDarkMode(enabled: boolean): Promise<void> {
     command: "cmd",
     args: ["uimode", "night", mode],
   });
-  await killAndRelaunch();
+  // Brief pause so the OS dispatches the UiMode Configuration change.
+  await browser.pause(2000);
+  // Confirm the Activity is still accessible after the mode switch.
+  await browser.waitUntil(
+    async () => {
+      try {
+        return await $("id=android:id/content").isExisting();
+      } catch {
+        return false;
+      }
+    },
+    { timeout: 20000, interval: 1500 },
+  );
 }
