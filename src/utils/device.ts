@@ -176,17 +176,31 @@ export async function endSimulatedCall(
 
 /** Set system font scale (accessibility). 1.0 = normal, 1.5 = 150% */
 export async function setFontScale(scale: number): Promise<void> {
-  await browser.execute("mobile: shell", {
-    command: "settings",
-    args: ["put", "system", "font_scale", String(scale)],
-  });
+  try {
+    await browser.execute("mobile: shell", {
+      command: "settings",
+      args: ["put", "system", "font_scale", String(scale)],
+    });
+    // Give Android time to process the font scale change
+    await browser.pause(1000);
+  } catch (error) {
+    console.error(`Failed to set font scale to ${scale}:`, error);
+    throw error;
+  }
 }
 
 /** Toggle dark mode on/off */
 export async function setDarkMode(enabled: boolean): Promise<void> {
-  const mode = enabled ? "yes" : "no";
-  await browser.execute("mobile: shell", {
-    command: "cmd",
-    args: ["uimode", "night", mode],
-  });
+  try {
+    const mode = enabled ? "yes" : "no";
+    await browser.execute("mobile: shell", {
+      command: "cmd",
+      args: ["uimode", "night", mode],
+    });
+    // Give Android time to process the dark mode change and notify apps
+    await browser.pause(1500);
+  } catch (error) {
+    console.error(`Failed to set dark mode to ${enabled}:`, error);
+    throw error;
+  }
 }

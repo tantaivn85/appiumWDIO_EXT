@@ -42,6 +42,18 @@ class HomePage extends BasePage {
     await exploreTab.click();
     // await browser.pause(5000);
   }
+
+  // Method to touch the content area to ensure app is responsive after system changes
+  async touchContent(): Promise<void> {
+    try {
+      const element = await $(this.contentSelector);
+      if (await element.isExisting()) {
+        await element.click();
+      }
+    } catch {
+      // Silently ignore if content is not accessible
+    }
+  }
 }
 
 export default new HomePage();
