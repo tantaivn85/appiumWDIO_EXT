@@ -136,13 +136,7 @@ describe("Screen Dynamics & OS Fragmentation", () => {
     });
 
     it("UI handles 150% font scale without crashing", async () => {
-      // App is already restarted by setFontScale, so short pause is enough
-      await browser.pause(2000);
-    });
-
-    it("UI handles 150% font scale without crashing", async () => {
       await setFontScale(1.5);
-      // App has been restarted with new font scale
       await browser.pause(1000);
 
       const homeVisible = await HomePage.isHomeVisible();
@@ -151,7 +145,6 @@ describe("Screen Dynamics & OS Fragmentation", () => {
 
     it("UI handles 200% font scale without crashing", async () => {
       await setFontScale(2.0);
-      // App has been restarted with new font scale
       await browser.pause(1000);
 
       const homeVisible = await HomePage.isHomeVisible();
@@ -160,7 +153,10 @@ describe("Screen Dynamics & OS Fragmentation", () => {
 
     it("UI handles smallest font scale (0.85)", async () => {
       await setFontScale(0.85);
-      // App has been restarted with new font scale
-      await browser.pause(1
+      await browser.pause(1000);
+
+      const homeVisible = await HomePage.isHomeVisible();
+      expect(homeVisible).toBe(true);
+    });
   });
 });
