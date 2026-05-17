@@ -103,27 +103,19 @@ describe("Screen Dynamics & OS Fragmentation", () => {
 
   describe("System Theme (Dark Mode / Light Mode)", () => {
     afterEach(async () => {
+      // setDarkMode restarts the app internally; no extra pause needed.
       await setDarkMode(false);
-      // App is already restarted by setDarkMode, so short pause is enough
-      await browser.pause(2000);
     });
 
     it("app renders correctly in dark mode", async () => {
       await setDarkMode(true);
-      // App has been restarted, check if home page is visible
-      await browser.pause(1000);
-
       const homeVisible = await HomePage.isHomeVisible();
       expect(homeVisible).toBe(true);
     });
 
     it("app handles toggling dark mode on and off", async () => {
       await setDarkMode(true);
-      await browser.pause(1000);
       await setDarkMode(false);
-      // App has been restarted, check if home page is visible
-      await browser.pause(1000);
-
       const homeVisible = await HomePage.isHomeVisible();
       expect(homeVisible).toBe(true);
     });
@@ -131,30 +123,24 @@ describe("Screen Dynamics & OS Fragmentation", () => {
 
   describe("Font Scaling (Accessibility)", () => {
     afterEach(async () => {
+      // setFontScale restarts the app internally; no extra pause needed.
       await setFontScale(1.0);
-      await browser.pause(3000);
     });
 
     it("UI handles 150% font scale without crashing", async () => {
       await setFontScale(1.5);
-      await browser.pause(1000);
-
       const homeVisible = await HomePage.isHomeVisible();
       expect(homeVisible).toBe(true);
     });
 
     it("UI handles 200% font scale without crashing", async () => {
       await setFontScale(2.0);
-      await browser.pause(1000);
-
       const homeVisible = await HomePage.isHomeVisible();
       expect(homeVisible).toBe(true);
     });
 
     it("UI handles smallest font scale (0.85)", async () => {
       await setFontScale(0.85);
-      await browser.pause(1000);
-
       const homeVisible = await HomePage.isHomeVisible();
       expect(homeVisible).toBe(true);
     });

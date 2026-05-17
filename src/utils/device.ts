@@ -15,11 +15,34 @@ export async function activateApp(): Promise<void> {
   await browser.activateApp(APP_PACKAGE);
 }
 
-/** Kill and relaunch – simulates OS tombstoning */
+/** Kill and relaunch – simulates OS tombstoning.
+ * Blocks until the app process is confirmed in the foreground (up to 20s).
+ */
 export async function killAndRelaunch(): Promise<void> {
   await terminateApp();
   await browser.pause(2000);
   await activateApp();
+
+  // Wait until the OS confirms the app is running in the foreground before
+  // returning. Without this, any element lookup issued immediately after
+  // activateApp() races against the Activity being created and throws a
+  // "stale element" / session error that isVisibleWithWait() silently eats.
+  await browser.waitUntil(
+    async () => {
+      try {
+        const state = await browser.queryAppState(APP_PACKAGE);
+        return state === 4; // 4 = RUNNING_IN_FOREGROUND
+      } catch {
+        return false;
+      }
+    },
+    { timeout: 20000, interval: 1000 },
+  );
+
+  // Give the first Activity frame time to render completely.
+  await browser.pause(2000);
+  // Dismiss any startup dialogs (crash reports, permission popups, etc.).
+  await dismissAlertIfPresent();
 }
 
 /**
@@ -174,43 +197,25 @@ export async function endSimulatedCall(
   execSync(`adb emu gsm cancel ${phoneNumber}`);
 }
 
-/** Set system font scale (accessibility). 1.0 = normal, 1.5 = 150% 
- * Note: Font scale changes require app restart to take effect
+/** Set system font scale (accessibility). 1.0 = normal, 1.5 = 150%
+ * Restarts the app so the new scale is applied to the Activity on startup.
  */
 export async function setFontScale(scale: number): Promise<void> {
-  try {
-    console.log(`Setting font scale to ${scale}...`);
-    await browser.execute("mobile: shell", {
-      command: "settings",
-      args: ["put", "system", "font_scale", String(scale)],
-    });
-    await browser.pause(500);
-    console.log(`Font scale set. Restarting app...`);
-    // Font scale changes require app restart
-    await killAndRelaunch();
-  } catch (error) {
-    console.error(`Failed to set font scale to ${scale}:`, error);
-    throw error;
-  }
+  await browser.execute("mobile: shell", {
+    command: "settings",
+    args: ["put", "system", "font_scale", String(scale)],
+  });
+  await killAndRelaunch();
 }
 
-/** Toggle dark mode on/off
- * Note: Dark mode changes are applied immediately but may require UI refresh
+/** Toggle dark mode on/off.
+ * Restarts the app so the Activity is re-created with the correct theme.
  */
 export async function setDarkMode(enabled: boolean): Promise<void> {
-  try {
-    const mode = enabled ? "yes" : "no";
-    console.log(`Setting dark mode to ${mode}...`);
-    await browser.execute("mobile: shell", {
-      command: "cmd",
-      args: ["uimode", "night", mode],
-    });
-    await browser.pause(1000);
-    console.log(`Dark mode set. Restarting app...`);
-    // Restart app to ensure it picks up the theme change
-    await killAndRelaunch();
-  } catch (error) {
-    console.error(`Failed to set dark mode to ${enabled}:`, error);
-    throw error;
-  }
+  const mode = enabled ? "yes" : "no";
+  await browser.execute("mobile: shell", {
+    command: "cmd",
+    args: ["uimode", "night", mode],
+  });
+  await killAndRelaunch();
 }
