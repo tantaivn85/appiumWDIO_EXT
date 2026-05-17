@@ -104,16 +104,14 @@ describe("Screen Dynamics & OS Fragmentation", () => {
   describe("System Theme (Dark Mode / Light Mode)", () => {
     afterEach(async () => {
       await setDarkMode(false);
-      await browser.pause(3000);
+      // App is already restarted by setDarkMode, so short pause is enough
+      await browser.pause(2000);
     });
 
     it("app renders correctly in dark mode", async () => {
       await setDarkMode(true);
-      // Dark mode changes require longer to propagate through Android system
-      await browser.pause(5000);
-      // Bring app to foreground to ensure it responds to theme changes
-      await HomePage.touchContent();
-      await browser.pause(2000);
+      // App has been restarted, check if home page is visible
+      await browser.pause(1000);
 
       const homeVisible = await HomePage.isHomeVisible();
       expect(homeVisible).toBe(true);
@@ -121,12 +119,10 @@ describe("Screen Dynamics & OS Fragmentation", () => {
 
     it("app handles toggling dark mode on and off", async () => {
       await setDarkMode(true);
-      await browser.pause(4000);
+      await browser.pause(1000);
       await setDarkMode(false);
-      await browser.pause(4000);
-      // Bring app to foreground to ensure it responds to theme changes
-      await HomePage.touchContent();
-      await browser.pause(2000);
+      // App has been restarted, check if home page is visible
+      await browser.pause(1000);
 
       const homeVisible = await HomePage.isHomeVisible();
       expect(homeVisible).toBe(true);
@@ -140,11 +136,14 @@ describe("Screen Dynamics & OS Fragmentation", () => {
     });
 
     it("UI handles 150% font scale without crashing", async () => {
-      await setFontScale(1.5);
-      // Font scale changes require app restart to properly apply
+      // App is already restarted by setFontScale, so short pause is enough
       await browser.pause(2000);
-      await HomePage.touchContent();
-      await browser.pause(5000);
+    });
+
+    it("UI handles 150% font scale without crashing", async () => {
+      await setFontScale(1.5);
+      // App has been restarted with new font scale
+      await browser.pause(1000);
 
       const homeVisible = await HomePage.isHomeVisible();
       expect(homeVisible).toBe(true);
@@ -152,10 +151,8 @@ describe("Screen Dynamics & OS Fragmentation", () => {
 
     it("UI handles 200% font scale without crashing", async () => {
       await setFontScale(2.0);
-      // Font scale changes require app restart to properly apply
-      await browser.pause(2000);
-      await HomePage.touchContent();
-      await browser.pause(5000);
+      // App has been restarted with new font scale
+      await browser.pause(1000);
 
       const homeVisible = await HomePage.isHomeVisible();
       expect(homeVisible).toBe(true);
@@ -163,13 +160,7 @@ describe("Screen Dynamics & OS Fragmentation", () => {
 
     it("UI handles smallest font scale (0.85)", async () => {
       await setFontScale(0.85);
-      // Font scale changes require app restart to properly apply
-      await browser.pause(2000);
-      await HomePage.touchContent();
-      await browser.pause(5000);
-
-      const homeVisible = await HomePage.isHomeVisible();
-      expect(homeVisible).toBe(true);
-    });
+      // App has been restarted with new font scale
+      await browser.pause(1
   });
 });

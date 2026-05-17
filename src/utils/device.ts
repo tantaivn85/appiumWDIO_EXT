@@ -174,31 +174,41 @@ export async function endSimulatedCall(
   execSync(`adb emu gsm cancel ${phoneNumber}`);
 }
 
-/** Set system font scale (accessibility). 1.0 = normal, 1.5 = 150% */
+/** Set system font scale (accessibility). 1.0 = normal, 1.5 = 150% 
+ * Note: Font scale changes require app restart to take effect
+ */
 export async function setFontScale(scale: number): Promise<void> {
   try {
+    console.log(`Setting font scale to ${scale}...`);
     await browser.execute("mobile: shell", {
       command: "settings",
       args: ["put", "system", "font_scale", String(scale)],
     });
-    // Give Android time to process the font scale change
-    await browser.pause(1000);
+    await browser.pause(500);
+    console.log(`Font scale set. Restarting app...`);
+    // Font scale changes require app restart
+    await killAndRelaunch();
   } catch (error) {
     console.error(`Failed to set font scale to ${scale}:`, error);
     throw error;
   }
 }
 
-/** Toggle dark mode on/off */
+/** Toggle dark mode on/off
+ * Note: Dark mode changes are applied immediately but may require UI refresh
+ */
 export async function setDarkMode(enabled: boolean): Promise<void> {
   try {
     const mode = enabled ? "yes" : "no";
+    console.log(`Setting dark mode to ${mode}...`);
     await browser.execute("mobile: shell", {
       command: "cmd",
       args: ["uimode", "night", mode],
     });
-    // Give Android time to process the dark mode change and notify apps
-    await browser.pause(1500);
+    await browser.pause(1000);
+    console.log(`Dark mode set. Restarting app...`);
+    // Restart app to ensure it picks up the theme change
+    await killAndRelaunch();
   } catch (error) {
     console.error(`Failed to set dark mode to ${enabled}:`, error);
     throw error;
