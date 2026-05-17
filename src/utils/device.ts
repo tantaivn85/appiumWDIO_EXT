@@ -198,20 +198,26 @@ export async function endSimulatedCall(
 
 /** Set system font scale (accessibility). 1.0 = normal, 1.5 = 150%
  *
- * Does NOT kill/relaunch: font_scale is a live Configuration change that the
- * running Activity handles (or React Native forwards to JS). Killing and
- * relaunching with software rendering (swiftshader_indirect) on CI causes the
- * display to render black due to a stale UiAutomator2 cache from the previous
- * instance, making all subsequent element queries return empty.
+ * The app crashes on fontScale configuration changes on the CI emulator
+ * (swiftshader_indirect, google_atd API 30). We relaunch it with activateApp()
+ * — without calling terminateApp() first (app is already dead) and without
+ * calling dismissAlertIfPresent() after (that call triggers a swiftshader
+ * display repaint that renders the screen permanently black).
  */
 export async function setFontScale(scale: number): Promise<void> {
   await browser.execute("mobile: shell", {
     command: "settings",
     args: ["put", "system", "font_scale", String(scale)],
   });
-  // Brief pause so the OS dispatches the Configuration change to the app.
+  // Let the crash / config-change settle before relaunching.
   await browser.pause(2000);
-  // Confirm the Activity is still alive and its window is accessible.
+  // Relaunch the app (do NOT call terminateApp first — app already crashed;
+  // an explicit kill before activateApp triggers the swiftshader black-screen).
+  await activateApp();
+  // Extra pause so the new Activity window replaces the old one in
+  // UiAutomator2's cache before we start polling (avoids an 8 ms stale-cache
+  // false positive that would cause the subsequent waitUntil to exit early).
+  await browser.pause(2000);
   await browser.waitUntil(
     async () => {
       try {
@@ -220,18 +226,17 @@ export async function setFontScale(scale: number): Promise<void> {
         return false;
       }
     },
-    { timeout: 20000, interval: 1500 },
+    { timeout: 25000, interval: 1500 },
   );
 }
 
 /** Toggle dark mode on/off.
  *
- * Does NOT kill/relaunch: `cmd uimode night yes/no` sends a UiMode
- * Configuration change to the running app. On CI emulators using
- * swiftshader_indirect (software rendering), killing and relaunching after a
- * night-mode change produces a permanently black display — the renderer does
- * not recover and UiAutomator2 finds zero elements for the rest of the test.
- * Letting the live Activity receive the change avoids this entirely.
+ * The app crashes on uiMode configuration changes on the CI emulator
+ * (swiftshader_indirect, google_atd API 30). We relaunch it with activateApp()
+ * — without calling terminateApp() first (app is already dead) and without
+ * calling dismissAlertIfPresent() after (that call triggers a swiftshader
+ * display repaint that renders the screen permanently black).
  */
 export async function setDarkMode(enabled: boolean): Promise<void> {
   const mode = enabled ? "yes" : "no";
@@ -239,9 +244,15 @@ export async function setDarkMode(enabled: boolean): Promise<void> {
     command: "cmd",
     args: ["uimode", "night", mode],
   });
-  // Brief pause so the OS dispatches the UiMode Configuration change.
+  // Let the crash / config-change settle before relaunching.
   await browser.pause(2000);
-  // Confirm the Activity is still accessible after the mode switch.
+  // Relaunch the app (do NOT call terminateApp first — app already crashed;
+  // an explicit kill before activateApp triggers the swiftshader black-screen).
+  await activateApp();
+  // Extra pause so the new Activity window replaces the old one in
+  // UiAutomator2's cache before we start polling (avoids an 8 ms stale-cache
+  // false positive that would cause the subsequent waitUntil to exit early).
+  await browser.pause(2000);
   await browser.waitUntil(
     async () => {
       try {
@@ -250,6 +261,6 @@ export async function setDarkMode(enabled: boolean): Promise<void> {
         return false;
       }
     },
-    { timeout: 20000, interval: 1500 },
+    { timeout: 25000, interval: 1500 },
   );
 }
