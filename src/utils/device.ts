@@ -199,44 +199,39 @@ export async function endSimulatedCall(
 /** Set system font scale (accessibility). 1.0 = normal, 1.5 = 150%
  *
  * The app crashes on fontScale configuration changes on the CI emulator
- * (swiftshader_indirect, google_atd API 30). We relaunch it with activateApp()
- * — without calling terminateApp() first (app is already dead) and without
- * calling dismissAlertIfPresent() after (that call triggers a swiftshader
- * display repaint that renders the screen permanently black).
+ * (swiftshader_indirect, google_atd API 30). We explicitly kill and relaunch it
+ * using the same proven pattern as killAndRelaunch().
  */
 export async function setFontScale(scale: number): Promise<void> {
   await browser.execute("mobile: shell", {
     command: "settings",
     args: ["put", "system", "font_scale", String(scale)],
   });
-  // Let the crash / config-change settle before relaunching.
+  // The app crashes on fontScale config change. Explicitly terminate and restart it.
+  await terminateApp();
   await browser.pause(3000);
-  // Relaunch the app (do NOT call terminateApp first — app already crashed;
-  // an explicit kill before activateApp triggers the swiftshader black-screen).
   await activateApp();
-  // Extra pause so the new Activity window replaces the old one in
-  // UiAutomator2's cache before we start polling (avoids an 8 ms stale-cache
-  // false positive that would cause the subsequent waitUntil to exit early).
-  await browser.pause(3000);
+
+  // Wait for the app window to be visible in UiAutomator2's window hierarchy.
+  // Polling the element directly forces re-indexing of the new Activity.
   await browser.waitUntil(
     async () => {
       try {
-        return await $("id=android:id/content").isExisting();
+        const el = await $("id=android:id/content");
+        return await el.isExisting();
       } catch {
         return false;
       }
     },
-    { timeout: 30000, interval: 500 },
+    { timeout: 25000, interval: 1500 },
   );
 }
 
 /** Toggle dark mode on/off.
  *
  * The app crashes on uiMode configuration changes on the CI emulator
- * (swiftshader_indirect, google_atd API 30). We relaunch it with activateApp()
- * — without calling terminateApp() first (app is already dead) and without
- * calling dismissAlertIfPresent() after (that call triggers a swiftshader
- * display repaint that renders the screen permanently black).
+ * (swiftshader_indirect, google_atd API 30). We explicitly kill and relaunch it
+ * using the same proven pattern as killAndRelaunch().
  */
 export async function setDarkMode(enabled: boolean): Promise<void> {
   const mode = enabled ? "yes" : "no";
@@ -244,23 +239,22 @@ export async function setDarkMode(enabled: boolean): Promise<void> {
     command: "cmd",
     args: ["uimode", "night", mode],
   });
-  // Let the crash / config-change settle before relaunching.
+  // The app crashes on uiMode config change. Explicitly terminate and restart it.
+  await terminateApp();
   await browser.pause(3000);
-  // Relaunch the app (do NOT call terminateApp first — app already crashed;
-  // an explicit kill before activateApp triggers the swiftshader black-screen).
   await activateApp();
-  // Extra pause so the new Activity window replaces the old one in
-  // UiAutomator2's cache before we start polling (avoids an 8 ms stale-cache
-  // false positive that would cause the subsequent waitUntil to exit early).
-  await browser.pause(3000);
+
+  // Wait for the app window to be visible in UiAutomator2's window hierarchy.
+  // Polling the element directly forces re-indexing of the new Activity.
   await browser.waitUntil(
     async () => {
       try {
-        return await $("id=android:id/content").isExisting();
+        const el = await $("id=android:id/content");
+        return await el.isExisting();
       } catch {
         return false;
       }
     },
-    { timeout: 30000, interval: 500 },
+    { timeout: 25000, interval: 1500 },
   );
 }
