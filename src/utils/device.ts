@@ -16,31 +16,30 @@ export async function activateApp(): Promise<void> {
 }
 
 /** Kill and relaunch – simulates OS tombstoning.
- * Blocks until the app process is confirmed in the foreground (up to 20s).
+ *
+ * Blocks until `android:id/content` is actually visible in the live view
+ * hierarchy (up to 25 s). Polling the element directly — rather than
+ * queryAppState — forces UiAutomator2 to re-index the new Activity window,
+ * which is the step that must complete before any subsequent element lookup
+ * can succeed.
  */
 export async function killAndRelaunch(): Promise<void> {
   await terminateApp();
-  await browser.pause(2000);
+  await browser.pause(3000);
   await activateApp();
 
-  // Wait until the OS confirms the app is running in the foreground before
-  // returning. Without this, any element lookup issued immediately after
-  // activateApp() races against the Activity being created and throws a
-  // "stale element" / session error that isVisibleWithWait() silently eats.
   await browser.waitUntil(
     async () => {
       try {
-        const state = await browser.queryAppState(APP_PACKAGE);
-        return state === 4; // 4 = RUNNING_IN_FOREGROUND
+        const el = await $("id=android:id/content");
+        return await el.isExisting();
       } catch {
         return false;
       }
     },
-    { timeout: 20000, interval: 1000 },
+    { timeout: 25000, interval: 1500 },
   );
 
-  // Give the first Activity frame time to render completely.
-  await browser.pause(2000);
   // Dismiss any startup dialogs (crash reports, permission popups, etc.).
   await dismissAlertIfPresent();
 }
