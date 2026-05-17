@@ -210,14 +210,14 @@ export async function setFontScale(scale: number): Promise<void> {
     args: ["put", "system", "font_scale", String(scale)],
   });
   // Let the crash / config-change settle before relaunching.
-  await browser.pause(2000);
+  await browser.pause(3000);
   // Relaunch the app (do NOT call terminateApp first — app already crashed;
   // an explicit kill before activateApp triggers the swiftshader black-screen).
   await activateApp();
   // Extra pause so the new Activity window replaces the old one in
   // UiAutomator2's cache before we start polling (avoids an 8 ms stale-cache
   // false positive that would cause the subsequent waitUntil to exit early).
-  await browser.pause(2000);
+  await browser.pause(3000);
   await browser.waitUntil(
     async () => {
       try {
@@ -226,7 +226,7 @@ export async function setFontScale(scale: number): Promise<void> {
         return false;
       }
     },
-    { timeout: 25000, interval: 1500 },
+    { timeout: 30000, interval: 500 },
   );
 }
 
@@ -245,14 +245,14 @@ export async function setDarkMode(enabled: boolean): Promise<void> {
     args: ["uimode", "night", mode],
   });
   // Let the crash / config-change settle before relaunching.
-  await browser.pause(2000);
+  await browser.pause(3000);
   // Relaunch the app (do NOT call terminateApp first — app already crashed;
   // an explicit kill before activateApp triggers the swiftshader black-screen).
   await activateApp();
   // Extra pause so the new Activity window replaces the old one in
   // UiAutomator2's cache before we start polling (avoids an 8 ms stale-cache
   // false positive that would cause the subsequent waitUntil to exit early).
-  await browser.pause(2000);
+  await browser.pause(3000);
   await browser.waitUntil(
     async () => {
       try {
@@ -261,6 +261,6 @@ export async function setDarkMode(enabled: boolean): Promise<void> {
         return false;
       }
     },
-    { timeout: 25000, interval: 1500 },
+    { timeout: 30000, interval: 500 },
   );
 }
